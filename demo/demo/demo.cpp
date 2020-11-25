@@ -81,8 +81,8 @@ int main(int argc, char *argv[]) {
     int n_classes = 80;
     if(argc > 5)
         n_classes = atoi(argv[5]); 
-    if(argc > 6)
     int n_batch = 1;
+    if(argc > 6)
         n_batch = atoi(argv[6]);
     float conf_thresh=0.3;
     if(argc > 7)
