@@ -81,15 +81,18 @@ int main(int argc, char *argv[]) {
     int n_classes = 80;
     if(argc > 5)
         n_classes = atoi(argv[5]); 
-    int n_batch = 1;
     if(argc > 6)
-        n_batch = atoi(argv[6]); 
-    bool show = true;
+    int n_batch = 1;
+        n_batch = atoi(argv[6]);
+    float conf_thresh=0.3;
     if(argc > 7)
-        show = atoi(argv[7]); 
+        conf_thresh = atof(argv[7]);
+    bool show = true;
     if(argc > 8)
-        jpeg_quality = atoi(argv[8]); 
-    
+        show = atoi(argv[8]); 
+    if(argc > 9)
+        jpeg_quality = atoi(argv[9]); 
+  
     if(n_batch < 1 || n_batch > 64)
         FatalError("Batch dim not supported");
 
@@ -136,7 +139,7 @@ int main(int argc, char *argv[]) {
         FatalError("Network type not allowed (3rd parameter)\n");
     }
 
-    detNN->init(net, n_classes, n_batch);
+    detNN->init(net, n_classes, n_batch, conf_thresh);
 
     gRun = true;
 
