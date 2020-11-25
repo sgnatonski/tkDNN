@@ -5,6 +5,7 @@
 # Compute Capabilities can be found here https://developer.nvidia.com/cuda-gpus#compute
 ARCH_BIN=7.2 # AGX Xavier
 #ARCH_BIN=6.2 # Tx2
+#ARCH_BIN=5.3 # Nano
 
 cd ~/Downloads
 sudo apt-get install -y build-essential \
@@ -26,6 +27,8 @@ sudo apt-get install -y build-essential \
     python3-venv \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer-plugins-bad1.0-dev \
     libdc1394-22-dev \
     libavresample-dev
 
@@ -58,7 +61,7 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D WITH_TBB=ON \
     ../
 
-make -j4
+make -j8
 sudo make install
 sudo ldconfig
 

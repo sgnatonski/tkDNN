@@ -1,0 +1,1 @@
+set(nats_DIR /usr/local/lib)

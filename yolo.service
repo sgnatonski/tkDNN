@@ -1,0 +1,18 @@
+[Unit]
+Description=YOLOv4tiny TensorRT service
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=1
+User=nano
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=yolo
+WorkingDirectory=/home/nano/tkDNN/build
+ExecStart=/home/nano/tkDNN/build/demo yolo4tiny_fp16.rt "uridecodebin uri=rtsp://192.168.0.123:554/h264 ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! appsink max-buffers=1 drop=true sync=false" nats://192.168.0.254:4222 y 80 1 0
+
+[Install]
+WantedBy=multi-user.target

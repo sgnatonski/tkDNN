@@ -145,6 +145,41 @@ void Yolo3Detection::postprocess(const int bi, const bool mAP){
     batchDetected.push_back(detected);
 }
 
+std::string Yolo3Detection::getDetections(int frameNumber){
+    tk::dnn::box b;
+    int x0, w, x1, y0, h, y1;
+    std::string det_class;
+    float prob = 0;
+    std::ostringstream result;
+        
+    result << "{";
+    result << "\"fn\": " << frameNumber <<  ",";
+    result << "\"det\": [";
+    for(int bi=0; bi<batchDetected.size(); ++bi){
+        result << "[";
+        for(int i=0; i<batchDetected[bi].size(); i++) {
+            b           = batchDetected[bi][i];
+            x0   		= b.x;
+            x1   		= b.x + b.w;
+            y0   		= b.y;
+            y1   		= b.y + b.h;
+            prob        = b.prob;
+            det_class 	= classesNames[b.cl];
+            result << "{ \"cl\": \"" << det_class << "\", " << "\"x0\": " << x0 << ", " << "\"x1\": " << x1 << ", " << "\"y0\": " << y0 << ", " << "\"y1\": " << y1 << ", " << "\"pr\": " << prob <<  " }";
+            if (i + 1 < batchDetected[bi].size()){
+                result << ",";
+            }
+        }
+        result << "]";
+        if (bi + 1 < batchDetected.size()){
+            result << ",";
+        }
+    }
+    result << "]";
+    result << "}";
+    return result.str();
+}
+
 
 tk::dnn::Yolo* Yolo3Detection::getYoloLayer(int n) {
     if(n<3)
