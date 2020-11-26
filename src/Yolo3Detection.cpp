@@ -150,7 +150,7 @@ void Yolo3Detection::postprocess(const int bi, const bool mAP){
     batchDetected.push_back(detected);
 }
 
-std::string Yolo3Detection::getDetections(int frameNumber){
+std::string Yolo3Detection::getDetections(int frameNumber, int width, int height){
     tk::dnn::box b;
     int x0, w, x1, y0, h, y1;
     std::string det_class;
@@ -158,7 +158,7 @@ std::string Yolo3Detection::getDetections(int frameNumber){
     std::ostringstream result;
         
     result << "{";
-    result << "\"fn\": " << frameNumber <<  ",";
+    result << "\"fn\": " << frameNumber <<  "," << "\"width\": " << width <<  ","<< "\"height\": " << height <<  ",";
     result << "\"det\": [";
     for(int bi=0; bi<batchDetected.size(); ++bi){
         result << "[";

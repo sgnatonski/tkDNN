@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <mutex>
 #include <map>
+#include <sstream>
+#include <vector>
 
 extern "C" {
 #include <nats/nats.h>
@@ -24,10 +26,25 @@ void sig_handler(int signo) {
     gRun = false;
 }
 
+std::vector<std::string> split (const std::string &s, char delim) {
+    std::vector<std::string> result;
+    std::stringstream ss (s);
+    std::string item;
+
+    while (getline (ss, item, delim)) {
+        result.push_back (item);
+    }
+
+    return result;
+}
+
 static void
 onMsg(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
 {
-    int f_no = atoi(natsMsg_GetData(msg));
+    auto payload = split(natsMsg_GetData(msg), ',');
+    int f_no = atoi(payload[0].c_str());
+    int w = payload.size() > 2 ? atoi(payload[1].c_str()) : 0;
+    int h = payload.size() > 2 ? atoi(payload[2].c_str()) : 0;
 
     auto itr = frame_cache.find(f_no);
 
@@ -53,9 +70,19 @@ onMsg(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
     std::vector<int> param(2);
     param[0] = cv::IMWRITE_JPEG_QUALITY;
     param[1] = jpeg_quality;//default(95) 0-100
-    cv::imencode(".jpg", frame, buff, param);
+    if (w > 0 && frame.size().width > w)
+    {
+        cv::Mat resized;
+        double scale = float(w)/frame.size().width;
+        cv::resize(frame, resized, cv::Size(0, 0), scale, scale);
+        cv::imencode(".jpg", resized, buff, param);
+    }
+    else 
+    {
+        cv::imencode(".jpg", frame, buff, param);
+    }
 
-    std::cout<<"replying with " << buff.size() << " bytes\n";
+    std::cout<< f_no << ": replying with " << buff.size() << " bytes\n";
 
     natsConnection_Publish(nc, natsMsg_GetReply(msg), buff.data(), buff.size());
     natsMsg_Destroy(msg);
@@ -92,6 +119,9 @@ int main(int argc, char *argv[]) {
         show = atoi(argv[8]); 
     if(argc > 9)
         jpeg_quality = atoi(argv[9]); 
+    bool gstreamer = true;
+    if(argc > 10)
+        gstreamer = atoi(argv[10]); 
   
     if(n_batch < 1 || n_batch > 64)
         FatalError("Batch dim not supported");
@@ -147,18 +177,27 @@ int main(int argc, char *argv[]) {
     std::cout<<"setting camera buffer size = 1\n";
     cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
     std::cout<<"opening camera\n";
-    cap.open(input, cv::CAP_GSTREAMER);
+
+    int numberOfFrames = 0;
+    if (gstreamer){
+        cap.open(input, cv::CAP_GSTREAMER);
+    }        
+    else {
+        cap.open(input, cv::CAP_FFMPEG);
+        numberOfFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
+    }
 
     if(!cap.isOpened())
         gRun = false; 
     else
         std::cout<<"camera started\n";
 
+    int w = cap.get(cv::CAP_PROP_FRAME_WIDTH);
+    int h = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+    int f = cap.get(cv::CAP_PROP_FPS);
+        
     cv::VideoWriter resultVideo;
     if(SAVE_RESULT) {
-        int w = cap.get(cv::CAP_PROP_FRAME_WIDTH);
-        int h = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
-        int f = cap.get(cv::CAP_PROP_FPS);
         resultVideo.open("cache.avi", cv::VideoWriter::fourcc('M','J','P','G'), 25, cv::Size(w, h));
     }
 
@@ -198,10 +237,17 @@ int main(int argc, char *argv[]) {
         
             //inference
             detNN->update(batch_dnn_input, n_batch);
-            std::string dets = yolo.getDetections(frameCount);
+            std::string dets = yolo.getDetections(frameCount, w, h);
 
             s = natsConnection_PublishString(conn, "detections", dets.c_str());
             //std::cout<<dets<<"\n";
+
+            if (!gstreamer){
+                //std::cout<<"Frame "<<frameCount<<"/"<<numberOfFrames<<"\n"; 
+                if (frameCount % numberOfFrames == 0) {
+                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                }
+            }
             
             if(show){
                 detNN->draw(batch_frame);
