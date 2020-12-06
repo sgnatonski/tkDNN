@@ -7,10 +7,6 @@
 #include <sstream>
 #include <vector>
 
-extern "C" {
-#include <nats/nats.h>
-}
-
 #include "CenternetDetection.h"
 #include "MobilenetDetection.h"
 #include "Yolo3Detection.h"
@@ -26,68 +22,6 @@ void sig_handler(int signo) {
     gRun = false;
 }
 
-std::vector<std::string> split (const std::string &s, char delim) {
-    std::vector<std::string> result;
-    std::stringstream ss (s);
-    std::string item;
-
-    while (getline (ss, item, delim)) {
-        result.push_back (item);
-    }
-
-    return result;
-}
-
-static void
-onMsg(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
-{
-    auto payload = split(natsMsg_GetData(msg), ',');
-    int f_no = atoi(payload[0].c_str());
-    int w = payload.size() > 2 ? atoi(payload[1].c_str()) : 0;
-    int h = payload.size() > 2 ? atoi(payload[2].c_str()) : 0;
-
-    auto itr = frame_cache.find(f_no);
-
-    if (itr == frame_cache.end()){
-        std::cout<<"frame " << f_no << " not found in cache\n";
-
-        natsConnection_Publish(nc, natsMsg_GetReply(msg), NULL, 0);
-        natsMsg_Destroy(msg);
-        return;
-    }
-
-    cv::Mat frame = itr->second;
-
-    if (frame.empty()){
-        std::cout<<"frame " << f_no << " found in cache but probably is now removed (too old)\n";
-
-        natsConnection_Publish(nc, natsMsg_GetReply(msg), NULL, 0);
-        natsMsg_Destroy(msg);
-        return;
-    }
-
-    std::vector<uchar> buff;//buffer for coding
-    std::vector<int> param(2);
-    param[0] = cv::IMWRITE_JPEG_QUALITY;
-    param[1] = jpeg_quality;//default(95) 0-100
-    if (w > 0 && frame.size().width > w)
-    {
-        cv::Mat resized;
-        double scale = float(w)/frame.size().width;
-        cv::resize(frame, resized, cv::Size(0, 0), scale, scale);
-        cv::imencode(".jpg", resized, buff, param);
-    }
-    else 
-    {
-        cv::imencode(".jpg", frame, buff, param);
-    }
-
-    std::cout<< f_no << ": replying with " << buff.size() << " bytes\n";
-
-    natsConnection_Publish(nc, natsMsg_GetReply(msg), buff.data(), buff.size());
-    natsMsg_Destroy(msg);
-}
-
 int main(int argc, char *argv[]) {
 
     std::cout<<"detection\n";
@@ -99,24 +33,24 @@ int main(int argc, char *argv[]) {
     std::string input = "../demo/yolo_test.mp4";
     if(argc > 2)
         input = argv[2]; 
-    std::string nats_url = NATS_DEFAULT_URL;
-    if(argc > 3)
-        nats_url = argv[3]; 
     char ntype = 'y';
-    if(argc > 4)
-        ntype = argv[4][0]; 
+    if(argc > 3)
+        ntype = argv[3][0]; 
     int n_classes = 80;
-    if(argc > 5)
-        n_classes = atoi(argv[5]); 
+    if(argc > 4)
+        n_classes = atoi(argv[4]); 
     int n_batch = 1;
-    if(argc > 6)
-        n_batch = atoi(argv[6]);
+    if(argc > 5)
+        n_batch = atoi(argv[5]);
     float conf_thresh=0.3;
-    if(argc > 7)
-        conf_thresh = atof(argv[7]);
+    if(argc > 6)
+        conf_thresh = atof(argv[6]);
     bool show = true;
+    if(argc > 7)
+        show = atoi(argv[7]); 
+    std::string nats_url = NATS_DEFAULT_URL;
     if(argc > 8)
-        show = atoi(argv[8]); 
+        nats_url = argv[8];    
     if(argc > 9)
         jpeg_quality = atoi(argv[9]); 
     bool gstreamer = true;
@@ -237,8 +171,8 @@ int main(int argc, char *argv[]) {
         
             //inference
             detNN->update(batch_dnn_input, n_batch);
-            std::string dets = yolo.getDetections(frameCount, w, h);
 
+            std::string dets = getDetections(detNN->batchDetected, frameCount, w, h);
             s = natsConnection_PublishString(conn, "detections", dets.c_str());
             //std::cout<<dets<<"\n";
 
