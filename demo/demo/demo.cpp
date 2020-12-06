@@ -11,11 +11,12 @@
 #include "MobilenetDetection.h"
 #include "Yolo3Detection.h"
 
+#include "./messaging.cpp"
+
 bool gRun;
 bool SAVE_RESULT = false;
 int frameCount = 0;
 std::map<int, cv::Mat> frame_cache;
-int jpeg_quality = 70;
 
 void sig_handler(int signo) {
     std::cout<<"request gateway stop\n";
@@ -47,15 +48,10 @@ int main(int argc, char *argv[]) {
         conf_thresh = atof(argv[6]);
     bool show = true;
     if(argc > 7)
-        show = atoi(argv[7]); 
-    std::string nats_url = NATS_DEFAULT_URL;
-    if(argc > 8)
-        nats_url = argv[8];    
-    if(argc > 9)
-        jpeg_quality = atoi(argv[9]); 
+        show = atoi(argv[7]);     
     bool gstreamer = true;
-    if(argc > 10)
-        gstreamer = atoi(argv[10]); 
+    if(argc > 8)
+        gstreamer = atoi(argv[8]); 
   
     if(n_batch < 1 || n_batch > 64)
         FatalError("Batch dim not supported");
@@ -63,23 +59,7 @@ int main(int argc, char *argv[]) {
     //if(!show)
     //    SAVE_RESULT = true;
     
-    natsConnection      *conn = NULL;
-    natsSubscription    *sub  = NULL;
-    natsMsg             *msg  = NULL;
-    natsStatus          s;
-
-    std::cout<<"connecting to NATS on " << nats_url << "\n";
-    s = natsConnection_ConnectTo(&conn, nats_url.c_str());
-    if (s != NATS_OK){
-        nats_PrintLastErrorStack(stderr);
-        exit(2);
-    }
-
-    s = natsConnection_Subscribe(&sub, conn, "frame", onMsg, NULL);
-    if (s != NATS_OK){
-        nats_PrintLastErrorStack(stderr);
-        exit(2);
-    }
+    connectNats(argc, argv);
 
     tk::dnn::Yolo3Detection yolo;
     tk::dnn::CenternetDetection cnet;
@@ -172,9 +152,7 @@ int main(int argc, char *argv[]) {
             //inference
             detNN->update(batch_dnn_input, n_batch);
 
-            std::string dets = getDetections(detNN->batchDetected, frameCount, w, h);
-            s = natsConnection_PublishString(conn, "detections", dets.c_str());
-            //std::cout<<dets<<"\n";
+            publishDetections(detNN->batchDetected, detNN->classesNames, frameCount, w, h);
 
             if (!gstreamer){
                 //std::cout<<"Frame "<<frameCount<<"/"<<numberOfFrames<<"\n"; 
@@ -212,12 +190,7 @@ int main(int argc, char *argv[]) {
         resultVideo.release();
     }
 
-    natsConnection_Destroy(conn);
-    if (s != NATS_OK)
-    {
-        nats_PrintLastErrorStack(stderr);
-        exit(2);
-    }
+    closeNats();
     
     if(!frame.data) {
         std::cout<<"No frame could be captured, terminating\n";

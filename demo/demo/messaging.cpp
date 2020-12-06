@@ -5,6 +5,14 @@ extern "C" {
 #include <nats/nats.h>
 }
 
+natsConnection      *conn = NULL;
+natsSubscription    *sub  = NULL;
+natsMsg             *msg  = NULL;
+natsStatus          s;
+
+extern std::map<int, cv::Mat> frame_cache;
+int jpeg_quality = 70;
+
 std::vector<std::string> split (const std::string &s, char delim) {
     std::vector<std::string> result;
     std::stringstream ss (s);
@@ -67,8 +75,8 @@ onMsg(natsConnection *nc, natsSubscription *sub, natsMsg *msg, void *closure)
     natsMsg_Destroy(msg);
 }
 
-static void
-getDetections(std::vector<std::vector<tk::dnn::box>> batchDetected, int frameNumber, int width, int height){
+static std::string
+getDetections(std::vector<std::vector<tk::dnn::box>> batchDetected, std::vector<std::string> classesNames, int frameNumber, int width, int height){
     tk::dnn::box b;
     int x0, w, x1, y0, h, y1;
     std::string det_class;
@@ -101,4 +109,39 @@ getDetections(std::vector<std::vector<tk::dnn::box>> batchDetected, int frameNum
     result << "]";
     result << "}";
     return result.str();
+}
+
+static void publishDetections(std::vector<std::vector<tk::dnn::box>> batchDetected, std::vector<std::string> classesNames, int frameNumber, int width, int height){
+    std::string dets = getDetections(batchDetected, classesNames, frameNumber, width, height);
+    s = natsConnection_PublishString(conn, "detections", dets.c_str());
+}
+
+static void connectNats(int argc, char *argv[]){
+    std::string nats_url = NATS_DEFAULT_URL;
+    if(argc > 9)
+        jpeg_quality = atoi(argv[9]);        
+    if(argc > 10)
+        nats_url = argv[10];    
+
+    std::cout<<"connecting to NATS on " << nats_url << "\n";
+    s = natsConnection_ConnectTo(&conn, nats_url.c_str());
+    if (s != NATS_OK){
+        nats_PrintLastErrorStack(stderr);
+        exit(2);
+    }
+
+    s = natsConnection_Subscribe(&sub, conn, "frame", onMsg, NULL);
+    if (s != NATS_OK){
+        nats_PrintLastErrorStack(stderr);
+        exit(2);
+    }
+}
+
+static void closeNats(){
+    natsConnection_Destroy(conn);
+    if (s != NATS_OK)
+    {
+        nats_PrintLastErrorStack(stderr);
+        exit(2);
+    }
 }
