@@ -110,8 +110,13 @@ target_link_libraries(test_rtinference tkDNN)
 add_executable(map_demo demo/demo/map.cpp)
 target_link_libraries(map_demo tkDNN)
 
+include_directories(usr/local/include)
+link_directories(usr/local/lib)
+find_package(nats REQUIRED)
+
 add_executable(demo demo/demo/demo.cpp)
 target_link_libraries(demo tkDNN)
+target_link_libraries(demo nats)
 
 #-------------------------------------------------------------------------------
 # Install

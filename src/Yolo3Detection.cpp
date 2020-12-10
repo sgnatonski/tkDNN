@@ -150,7 +150,6 @@ void Yolo3Detection::postprocess(const int bi, const bool mAP){
     batchDetected.push_back(detected);
 }
 
-
 tk::dnn::Yolo* Yolo3Detection::getYoloLayer(int n) {
     if(n<3)
         return yolo[n];
